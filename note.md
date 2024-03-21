@@ -185,7 +185,6 @@ $$
    \sum\limits_{i=1}^3\left(\exp(\sigma_i)-(1+\sigma_i)+(m_i)^2\right)
    $$
    
-
 2. 最大化(离散的$z$下，取得$x$的期望)
    $$
    A_2=\int\limits_zq(z|x)\log P(x|z)dz=E_{q(z|x)}[\log P(x|z)]
@@ -342,3 +341,196 @@ $$
 ###### 拟合编码分布
 
 将图片编码为$m\times m$的整数矩阵后，其一定程度上保留了原来输入的图片的位置信息，可以使用自回归模型来对其进行拟合。得到编码分布，可以随机生成一个新的编码矩阵，然后通过编码表$E$来映射为$3$维的实数矩阵$z_q$（行\*列\*编码的宽度），最终通过$\text{decoder}$得到一张图片
+
+### MotionGPT: Human Motion as a Foreign Language
+
+###### Introduction
+
+前作通常将动作和语言视作分开的模态，这会导致训练需要严格绑定的动作和文本数据。
+
+且监督为任务驱动，很难泛化到没有涉及到的任务或数据，因为模型缺乏一种对语言和动作之间具体理解。
+
+于是本文聚焦于建立一种**可以泛化到多种任务**并且可以**从更可行的动作和语言数据来深入学习动作语言关系**的预训练大语言模型，
+
+主要有两个挑战
+
+1. 建模语言和动作之间的关系。
+2. 建立一个统一的多任务框架，可以推广到新的任务上。
+
+基于视觉语言预训练BEIT-3来将人类动作视作一门外语。
+
+将动作和语言数据结合在一起，并且使用单一的词汇来编码，可以使动作和语言的关系显得更透明。
+
+动作-语言预训练在提高动作任务上的表现有着很大的潜力。同时，预训练允许用户使用自然语言化的指令，（提示词Prompt）。可以使模型变得更多元化，以及对用户更友好。
+
+本篇提出一个统一的动作-语言框架，即MotionGPT，可以利用预训练大语言模型的强**语言生成能力**和**零样本学习能力**来完成和人类动作相关的任务。
+
+为了使MotionGPT拥有能够理解并产生人类动作的能力，首先学习了一个基于动作的VQ-VAE模型，目的是建立动作词典，类似于英语词典可以将raw的动作数据转化为一系列的动作信号(motion tokens)。
+
+这些记号会随后被预训练大预言模型处理，会学习动作语言潜在的语法和句法以及与对应语言描述之间的关系。
+
+为了更高效的融合动作和语言，我们设计一个两步骤的训练。
+
+1. 在raw motion数据集上序列来学习motion language最基本的语法、句法。
+2. 对于提示词的调试，我们在指令数据集上fine-tune了语言模型。
+
+扩展的一些试验展示了MotionGPT可以在text-to-motion，motion-to-text，motion prediction和motion in-between上达到state-of-the-art的表现。
+
+###### Related Work
+
+**Human Motion Synthesis**
+
+使用多模态数据，生成广泛真实的类-人类的动作。模态：文本、动作和不完全的动作。
+
+Text-to-motion使最重要的动作生成的任务之一，为了用户友好和方便的语言输入。
+
+**MDM**提出了基于扩散的生成模型，在多种动作任务上分别训练。
+
+**MLD**进一步使用隐扩散模型，来基于不同的条件输入来生成动作。
+
+**T2M-GPT**研究了基于VQ-VAE和大预言模型的生成式框架进行的动作生成。
+
+动作完成任务会根据部分动作进行动作的生成，比如传统的动作预测或者中间动作生成。
+
+尽管在多种人类动作任务上已经表现出了不错的结果，以上的方法被限制在使用一个单一的模型来处理多种任务。
+
+**Human Motion Captioning**
+
+为了用自然语言去描述人类的动作，学习从人类动作到语言的映射，主要用到两个统计学模型。
+
+**TM2T**提出了一种新的动作表示，将动作压缩为一个短的离散变量的序列，随后用一个神经网络来将这两个模态之间建立映射。
+
+这些工作的局限是，使用单一的框架来进行双向翻译的工作。
+
+**Language Models and Multi-Modal**（LLMs）
+
+大语言模型，拥有很强的理解力和泛化力，善于处理自然语言。
+
+**BERT**预训练深度双向的语言表示，可以有效的支持下游任务。
+
+**T5**介绍了一个统一的框架，可以将基于文本的语言问题转化为text-to-text的格式。
+
+更多最新的调查显示，使用input-output成对的指令和配套的答案的输入对来训练，可以更好的提升预训练模型的表现。
+
+**FLAN**展示了指令微调的技术，在训练未涉及到的任务上的表现高于没有微调过的模型。
+
+**CLIP**学习了语义潜在的表示，可以配套的将文本和对应的语言描述相结合。
+
+尽管上述的语言模型很成功，但对于能处理人类动作的能力来说还是十分有限。
+
+**Motion Language Pre-training**
+
+现存的text-to-motion方法基本都是接受纯文本输入。尽管这些模型能够从文本描述中生成动作，如**InstructGPT**这也仅仅被限制在支持用户的指令。
+
+换句话说，它们不允许用户为特定的应用提供特定于上下文的指令。MotionGPT利用**CLIP**的语言和视觉理解将其潜在空间与运动自编码器对齐。
+
+同时，更多的语言模型，像是**T5**和**InstructGPT**，已经被发展为解决多样的语言任务，并没有能够泛化到解决动作的任务。因此，我们提出MotionGPT来有效的解决自然语言模型和人类动作任务的融合，为动作合成的问题提供一致的解。
+
+##### Method
+
+MotionGPT由一个负责**将raw motion data转化为离散motion tokens**的motion分词器，以及一个**能够理解 用对应的文本描述和预训练大语言模型产生的motion tokens**的 感知动作的语言模型。
+
+为了能够处理任务相关的任务，提出三阶段的训练，分别是
+
+1. Training of motion tokenizer.
+2. Motion-language pre-training.
+3. Instruction tuning
+
+我们首先提出motion tokenizer由一个motion encoder $\mathcal\varepsilon$ 和一个motion decoder $\mathcal D$ 组成，将一个$M$帧长度的动作$m^{1:m}=\{x^i\}_{i=1}^M$ 编码为$L$个motion tokens，$z^{1:L}=\{z^i\}_{i=1}^L,L=M/l$. 解码$z^{1:l}$ 会重新得到动作 $\hat{m}^{1:m}=\mathcal D(z^{1:L})=D(\mathcal\varepsilon(m^{1:m}))$
+
+- $l$ 是动作长度的降采样率
+
+随后给定一个$N$长度的序列$w^{1:N}=\{w^i\}_{i=1}^N$描述一个动作相关的问题或者要求，MotionGPT针对此去生成它的答案为长度为$L$的tokens $\hat{x}^{1:L}=\{\hat{x}^i\}_{i=1}^L$. 这可以是人类human motion tokens $\hat{x}_m^{1:L}$或者是文本记号 $\hat{x}_t^{1:L}$, 最后会输出一个动作 $\hat{m}^{1:M}$或者一段序列$\hat{w}^{1:L}$来描述给定的动作。
+
+###### 3.1 Motion Tokenizer
+
+为了用离散的tokens来表达动作，我们基于VQ-VAE方法预训练了一个3D人类动作的tokenizer $\mathcal V$。我们的motion tokenizer由一个编码器 $\mathcal\varepsilon$ 和一个解码器 $\mathcal D$ 组成。编码器产生离散的motion tokens，携带极高的信息密度，解码器有能力去将motion tokens解码为动作序列$\hat{m}^{1:M}$. 这个方法允许我们高效的将动作表示为一种语言，促进动作和自然语言在不同的动作相关的任务上的融合。
+
+具体来说，motion encoder $\mathcal\varepsilon$ 先应用 $1D$ 卷积在时间维度上，来给出逐帧的动作特征 $m^{1:M}$。接下来得到隐变量向量$\hat{z}^{1:L}=\mathcal\varepsilon(m^{1:M})$. 随后，将 $\hat{z}$ 通过离散量化来转换为codebook元素 $z$ 的集合。
+
+可学习的codebook $Z=\{z_i\}_{i=1}^K\subset R^d$, 由$K$个隐的嵌入式向量组成，每一个都是$d$维。量化的过程$Q(\cdot)$将原始的行向量$b$替换为$Z$中的元素$b_k$，写作
+$$
+z_i=Q(\hat{z}^i):=\arg\min\limits_{z_k\in Z}||\hat{z}_i-z_k||_2
+$$
+在量化之后，motion decoder $\mathcal D$ 将 $z^{1:L}=\{z^i\}_{i=1}^L$重新投影回原始的动作空间 $\hat{m}^{1:M}$，生成$M$帧的动作。
+
+为了训练这个动作的tokenizer，我们利用了三个不同的损失函数来训练并优化motion tokenizer: $\mathcal L_{\mathcal V}=\mathcal L_r+\mathcal L_e+\mathcal L_c$
+
+1. $\mathcal L_r$: Reconstruction loss.
+2. $\mathcal L_e$: Embedding loss.
+3. $\mathcal L_r$: Commitment loss.
+
+为了更好的提升生成动作的质量，我们利用$L_1$ smooth loss 和 velocity regularization在$\mathcal L_r$中，同样还有 exponential moving average (EMA) 和 codebook reset techniques 来提升训练时codebook的效用。在补充材料处，提供了更多架构的细节。
+
+###### 3.2 Motion-aware Language Model
+
+部署motion tokenizer后，可以得到一个$m^{1:M}\mapsto z^{1:L}$，也允许了在语言模型中嵌入类似的联合表示。将他们结合在统一的字典中后，开始分开学习动作和语言。
+
+首先先将motion tokens $z^{1:L}$ 表示为一个索引的序列 $s^{1:L}=\{s^i\}_{i=1}^L$, $s^i$ 对应了motion tokens $z^{1:L}$ 的索引。另一方面，过去的语言模型，类似 T5, 将文本编码为 WordPiece tokens. 他们利用一个有着$K_t$个word pieces长度的词汇表，并且训练在混合语言的数据集上训练 SentencePiece model。
+
+大部分过去的 text-to-motion 或者 motion-to-text 的方法，部署了不同的模块来分开处理动作和语言，但我们针对性的同时建模语言和文本。为了达到这个目标，我们将原始的文本词汇$V_t=\{v_t^i\}_{i=1}^{K_t}$和动作词汇$V_m=\{v_m^i\}_{i=1}^{K_m}$结合在一起，也保留了在我们的motion codebook $Z$ 中出现的顺序。
+
+其次，$V_m$包括了一些特殊的记号像是boundary indicators，例如`</som>`和`</eom>`作为**start of motion**和**end of motion**.
+
+因此，我们部署了一套全新的统一的text-motion词汇表$V=\{V_t,V_m\}$并且可以在一个更广泛的格式上形成更多样的动作相关的任务，因为输入的"words"和输出的"words"是从相同的$V$中得到的。
+
+这些”words“可以表示更加自然的语言，人类动作，甚至是两者的融合，这视具体需要解决的任务来定。
+
+因此，我们的MotionGPT允许我们在一个单模型中拥有更灵活的表达和生成模式。
+
+为了解决条件生成任务，我们部署了一个基于Transformer的模型，可以有效的将输入的序列映射到输出上。我们的源输入由一个tokens的序列组成，$X_s=\{x_s^i\}_{i=1}^N$，$x_s\in V$以及$N$表示输入长度。
+
+相似的，目标输出为$X_t=\{x_t^i\}_{i=1}^L$, $x_t\in V$且$L$表示输出长度。
+
+源tokens会被喂进tranformer encoder中，并且后续的decoder会在每一步中，在自回归的模式下，预测下一个token的概率分布。
+$$
+p_\theta(x_t|x_s)=\prod_ip_\theta(x_t^i|x_t^{<i},x_s)
+$$
+优化这一目标，MotionGPT学会去抓住数据分布下潜在的模式和关系，强化了生成目标”words“的准确性和意义性。
+
+在推理过程中，目标记号被从预测分布$p_\theta(\hat{x}_t^i|\hat{x}_t^{<i},x_s)$中递归采样，直到结束符号`</s>`出现。
+
+这种采样策略使得目标序列的生成是一种步进式的行为，每一个记号都是由源输入和之前的记号概率性决定的。
+
+###### 3.3 Training strategy
+
+因为T5s仅仅被暴露在语言数据下，被语言词汇表$V_t$所表示，我们将动作和语言的结合可以让这个模型来理解人类动作的概念，通过学习动作词汇$V_m$。
+
+我们的训练主要分为三步
+
+1. Training of motion tokenizer：聚焦于学习motion codebook来将人类的动作表达为离散的tokens。
+2. Motion-language pre-training stage：包含了非监督和监督的目标来学习动作语言之间的关系。
+3. Instruction tuning stage：基于有提示词的指令来微调模型针对各种不同的动作任务。
+
+**Training of motion tokenizer**: 
+
+优化后，motion tokenizer在后续的pipeline中维持不变。
+
+**Motion-language Pre-training Stage**:
+
+T5模型在自然语言数据集上被训练和微调，基于指令。
+
+我们接下来会使用语言和动作数据的混合来继续预训练模型，同时使用有监督和无监督的行为。
+
+1. 为了泛化到不同的下游任务，我们设计了一个目标，在输入tokens $X_s$中的$15\%$的tokens会被随机的替换为sentinel token. 同时，对应的目标序列也被提取出dropped-out的tokens，被输入tokens序列的相同的sentinel token替换掉，同时会有一个额外的sentinel token来表示序列的结束。
+2. 随后，我们学习motion-language之间的关系，通过text-motion数据集的监督。我们用motion-language的监督任务来训练MotionGPT，输入是一个人类动作或文字输入。
+
+在非监督和监督的训练过程结束后，我们的模型会等同于具有了理解语言和动作之间关系的能力。
+
+**Insturction Tuning Stage**
+
+我们建立了一个多任务的text-motion数据集，通过将已有的类似HumanML3D和KIT等已经存在的text-to-motion数据集制定为指令。
+
+特殊的，我们定义了$15$种核心的任务，类似文字生成动作，动作捕捉，动作预测以及其他的一些任务。
+
+对于每个人物，我们将大量不同的指令模板结合起来，产生了多于$1000$种不同的任务，每个都有一种独特的命令提示词。
+
+例如，一个动作生成任务的Instruction prompt可以是
+
+”Can you generate a motion sequence that depicts ‘a person emulates the motions of a waltz dance’?” 
+
+同样，动作捕捉的任务，提示词可能是
+
+"Provide an accurate caption describing the motion of <motion_tokens>", `<motion_tokens>`代表了一个motion tokens的序列，由motion tokenizer生成。
+
+指令微调促进了跨任务的表现，并增强了未见任务或提示的模型性能。
