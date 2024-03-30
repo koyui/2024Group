@@ -675,3 +675,20 @@ $\text{3D}$人类姿态动作从AMASS中采样。所有的三元对都有自然�
 一些数据统计，不记了。
 
 准备开始部署项目
+
+###### 部署踩坑指南
+
+`requirements.txt` 版本兼容性一直过不去
+
+- **解决**：先安$4$个git + torch，然后安剩下的依赖
+
+PyOpenGL问题：
+
+- 运行前加入宏：`MESA_GL_VERSION_OVERRIDE=4.1`
+- 将`site-packages`中`pyrender`下的`renderer.py`中的大概在`1091-1096`行左右，有两个位置的`glRenderbufferStorageMultisample`中的`4`改为`1`。
+
+个人有关文件目录解析的手稿：
+
+<img src="figures/script.jpg" width="70%" align=left>
+
+**尝试结果**：过拟合，依托答辩。
