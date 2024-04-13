@@ -687,8 +687,191 @@ PyOpenGL问题：
 - 运行前加入宏：`MESA_GL_VERSION_OVERRIDE=4.1`
 - 将`site-packages`中`pyrender`下的`renderer.py`中的大概在`1091-1096`行左右，有两个位置的`glRenderbufferStorageMultisample`中的`4`改为`1`。
 
+Streamlit配置文件修改：
+
+```shell
+streamlit config show > ~/.streamlit/config.toml
+```
+
+- 然后将`fileWatcherType`修改为`fileWatcherType = "none"`
+
 个人有关文件目录解析的手稿：
 
 <img src="figures/script.jpg" width="70%" align=left>
 
 **尝试结果**：过拟合，依托答辩。
+
+### 旋转矩阵
+
+###### 性质
+
+若$M$是任何维度的一般旋转矩阵：$M\in R^{n\times n}$
+
+- 旋转矩阵的逆矩阵是它的转置矩阵（两个向量的点积(内积)在它们被一个矩阵旋转之后保持不变）
+  $$
+  \begin{aligned}
+  	&a^T\cdot b=(Ma)^T\cdot Mb\\
+  	\Rightarrow\quad&a^T\cdot b=a^TM^TMb\\
+  	\Rightarrow\quad&M^TM=I
+  \end{aligned}
+  $$
+
+- 旋转矩阵的列向量正交（单位阵经过旋转得到的仍然为互相垂直的向量，且向量长度不会改变）（构成空间中一组正交基）
+  $$
+  \begin{aligned}
+      R(x,y,z)&=\left[
+          \begin{array}{ccc}
+              R_{11} & R_{12} & R_{13}\\
+              R_{21} & R_{22} & R_{23}\\
+              R_{31} & R_{32} & R_{33}
+          \end{array}
+      \right]
+      \left[
+          \begin{array}{ccc}
+              1 & 0 & 0\\
+              0 & 1 & 0\\
+              0 & 0 & 1
+          \end{array}
+      \right]\\
+      &=(\mathbf{r_1},\mathbf{r_2},\mathbf{r_3})
+  \end{aligned}
+  $$
+
+<img src="figures/rotmat.png" width="30%" align=left>
+
+- 旋转矩阵行列式为$1$
+  - 三阶行列式的几何意义为其行向量/列向量张开的平行六面体的有向体积。
+  - 旋转矩阵张开的平行六面体为边长为$1$的正方形
+  - 则体积为$1$，行列式为$1$
+    - $\det(\mathbf{r_1},\mathbf{r_2},\mathbf{r_3})=\mathbf{r_1}\cdot(\mathbf{r_2}\times\mathbf{r_3})$
+
+**二维空间**
+
+平面二维旋转 $\vec{OP}\to\vec{OP'}$
+
+<img src="figures/2drot.png" width="20%" align=left>
+$$
+\begin{cases}
+	x'=\left|OP\right|\cdot\cos(\alpha+\beta)
+		=\left|OP\right|\cdot(\cos\alpha\cdot\cos\beta-\sin\alpha\cdot\sin\beta)
+    	=x\cdot\cos\beta-y\cdot\sin\beta\\
+    y'=\left|OP\right|\cdot\sin(\alpha+\beta)
+    	=\left|OP\right|\cdot(\cos\alpha\cdot\sin\beta+\sin\alpha\cdot\cos\beta)
+    	=x\cdot\sin\beta+y\cdot\cos\beta
+\end{cases}
+$$
+写成矩阵格式（左乘）
+$$
+\begin{bmatrix}
+	x'\\y'
+\end{bmatrix}=
+\begin{bmatrix}
+	\cos\beta&-\sin\beta\\
+	\sin\beta&\cos\beta
+\end{bmatrix}\cdot
+\begin{bmatrix}
+	x\\y
+\end{bmatrix}
+$$
+**三维空间**
+
+拆解为绕$x,y,z$三个轴的旋转（注意右手系的一致性）<font color="red">**坐标为列向量，左乘旋转矩阵，逆时针旋转**</font>
+
+1. 绕$z$轴旋转<font color="blue">**(Pitch)**</font>
+   $$
+   \begin{aligned}
+   	&\begin{cases}
+   		x'=x\cdot\cos\beta-y\cdot\sin\beta\\
+   		y'=x\cdot\sin\beta+y\cdot\cos\beta\\
+   		z'=z
+   	\end{cases}\\
+   	R_z=
+   	&\begin{bmatrix}
+           x'\\
+           y'\\
+           z'
+   	\end{bmatrix}=
+   	\begin{bmatrix}
+           \cos\beta & -\sin\beta & 0\\
+           \sin\beta & \cos\beta & 0\\
+           0 & 0 & 1
+   	\end{bmatrix}\cdot
+   	\begin{bmatrix}
+           x\\
+           y\\
+           z
+   	\end{bmatrix}
+   \end{aligned}
+   $$
+   <img src="figures/zrot.png" width="20%" align=left>
+
+2. 绕$y$轴旋转<font color="blue">**(Head)**</font>
+   $$
+   R_Y=
+   \begin{bmatrix}
+   	x'\\
+   	y'\\
+   	z'
+   \end{bmatrix}=
+   \begin{bmatrix}
+   	cos\beta & 0 & sin\beta\\
+   	0 & 1 & 0\\
+   	-sin\beta & 0 & cos\beta
+   \end{bmatrix}
+   \begin{bmatrix}
+   	x\\
+   	y\\
+   	z
+   \end{bmatrix}
+   $$
+   
+
+<img src="figures/yrot.png" width="20%" align=left>
+
+​			<font color="red">**注意：2d的旋转矩阵是x->y方向，这里为了保持右手系，所以是z->x方向，所以2d旋转矩阵要取转置，-sin在右下方**</font>
+
+3. 绕$x$轴旋转<font color="blue">**(Roll)**</font>
+   $$
+   R_X=
+   \begin{bmatrix}
+   	x'\\
+   	y'\\
+   	z'
+   \end{bmatrix}=
+   \begin{bmatrix}
+   	1 & 0 & 0\\
+   	0 & cos\beta & -sin\beta \\
+   	0 & sin\beta & cos\beta
+   \end{bmatrix}
+   \begin{bmatrix}
+   	x\\
+   	y\\
+   	z
+   \end{bmatrix}
+   $$
+   <img src="figures/xrot.png" width="20%" align=left>
+
+则三轴全旋转矩阵：先绕$x$，再绕$y$，再绕$z$:
+$$
+M_{ZYX}=
+\begin{bmatrix}
+	cos(\mathrm{Roll}) & -sin(\mathrm{Roll}) & 0\\
+	sin(\mathrm{Roll}) & cos(\mathrm{Roll}) & 0\\
+	0 & 0 & 1
+\end{bmatrix}
+\begin{bmatrix}
+	cos(\mathrm{Head}) & 0 & sin(\mathrm{Head})\\
+	0 & 1 & 0\\
+	-sin(\mathrm{Head}) & 0 & cos(\mathrm{Head})
+\end{bmatrix}
+\begin{bmatrix}
+    1 & 0 & 0\\
+    0 & \cos\text{(Pitch)} & -sin\text{(Pitch)}\\ 
+    0 & \sin\text{(Pitch)} & cos\text{(Pitch)}
+\end{bmatrix}
+$$
+整理后，得到：
+
+![image-20240413191752244](C:\Users\57375\AppData\Roaming\Typora\typora-user-images\image-20240413191752244.png)
+
+​	<font color='red'>**绕轴旋转顺序不一样，得到的旋转矩阵也不一样**</font>
